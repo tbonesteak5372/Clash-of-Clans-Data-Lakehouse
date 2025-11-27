@@ -12,7 +12,9 @@ MinIO (S3-compatible object storage)
 ![Tools Diagram](assets/tools.png)
 
 ## How to Start
-<docker compose up --build>
+```bash
+docker compose up --build
+```
 
 Airflow Web UI:
 
@@ -26,6 +28,7 @@ http://localhost:8080
 - `clash_api/` — API ingestion script and raw parquet output  
 - `minio/` — Local MinIO storage  
 - `docker-compose.yml`
+
 
 
 
