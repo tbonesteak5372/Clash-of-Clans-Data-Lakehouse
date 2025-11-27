@@ -9,22 +9,23 @@ Spark (master and workers)
 
 MinIO (S3-compatible object storage)
 
-
 ![Tools Diagram](assets/tools.png)
 
 ## How to Start
-docker compose up --build
+<docker compose up --build>
 
 Airflow Web UI:
 
-http://localhost:8080
+<http://localhost:8080>
+
+## Folder Structure
+
+- `airflow/` — DAGs, plugins, configs  
+- `spark/` — Spark jobs and config  
+- `clash_api/` — API ingestion script and raw parquet output  
+- `minio/` — Local MinIO storage  
+- `docker-compose.yml`
 
 
-# Folder Structure
-airflow/       - DAGs, plugins, configs
-spark/         - Spark jobs and config
-clash_api/     - API ingestion script and raw parquet output
-minio/         - Local MinIO storage
-docker-compose.yml
 
 
