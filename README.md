@@ -20,10 +20,11 @@ Airflow Web UI:
 http://localhost:8080
 
 
-Folder Structure
+# Folder Structure
 airflow/       - DAGs, plugins, configs
 spark/         - Spark jobs and config
 clash_api/     - API ingestion script and raw parquet output
 minio/         - Local MinIO storage
 docker-compose.yml
+
 
