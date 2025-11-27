@@ -1,0 +1,9 @@
+apache-airflow-providers-apache-spark
+apache-airflow-providers-amazon
+pyspark==3.5.7
+boto3
+minio
+pandas
+pyarrow
+python-dotenv
+requests

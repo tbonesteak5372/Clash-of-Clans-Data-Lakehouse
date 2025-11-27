@@ -1,0 +1,58 @@
+# ---------------------------
+# PYTHON
+# ---------------------------
+__pycache__/
+*.pyc
+
+# ---------------------------
+# AIRFLOW
+# ---------------------------
+airflow/logs/
+airflow/dags/__pycache__/
+airflow/plugins/__pycache__/
+
+# PID files Airflow generates
+airflow/scheduler/*.pid
+airflow/dag_processor_manager.pid
+
+# ---------------------------
+# SPARK
+# ---------------------------
+spark/data/
+spark/logs/
+spark/spark-warehouse/
+spark/work/
+spark/events/
+spark/eventlog/
+spark/.sparkStaging/
+spark/conf
+
+spark/**/*.pyc
+spark/**/__pycache__/
+
+# ---------------------------
+# MINIO
+# ---------------------------
+minio/data/
+minio/.minio.sys/
+
+# ---------------------------
+# CLASH API TEMP DATA
+# (your parquet data files)
+# ---------------------------
+clash_api/*.parquet
+clash_api/**/__pycache__/
+
+# ---------------------------
+# DOCKER
+# ---------------------------
+.env
+*.env
+docker-compose.override.yml
+
+# ---------------------------
+# EDITOR / SYSTEM
+# ---------------------------
+.vscode/
+.DS_Store
+Thumbs.db

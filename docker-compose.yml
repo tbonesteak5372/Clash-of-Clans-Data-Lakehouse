@@ -1,0 +1,230 @@
+x-spark-common: &spark-common
+  build:
+    context: ./spark
+    dockerfile: Dockerfile
+  volumes:
+    - ./spark/jobs:/opt/spark/work-dir/jobs
+    - spark-logs:/opt/spark/spark-events
+    - ./spark/data:/opt/spark/work-dir/spark-airflow-minio/data
+    - ./clash_api:/opt/spark/work-dir/clash_api
+  environment:
+    - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+    - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+    - AWS_REGION=${AWS_REGION}
+  env_file:
+    - ./spark/.env.spark
+  networks:
+    - coc
+
+x-airflow-common: &airflow-common
+  build:
+    context: .
+    dockerfile: airflow/Dockerfile
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+    AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@postgres/airflow
+    AIRFLOW__CELERY__BROKER_URL: redis://:@redis:6379/0
+    AIRFLOW__CORE__FERNET_KEY: ''
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__API__AUTH_BACKEND: 'airflow.api.auth.backend.basic_auth'
+
+    # Spark Submit Config
+    SPARK_HOME: /opt/spark
+    JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+    PYSPARK_PYTHON: python3
+    SPARK_MASTER: spark://spark-master:7077
+
+    # MinIO
+    AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+    AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+    AWS_DEFAULT_REGION: ${AWS_REGION}
+    S3_ENDPOINT_URL: http://minio:9000
+
+  volumes:
+    - ./airflow/dags:/opt/airflow/dags
+    - ./airflow/logs:/opt/airflow/logs
+    - ./airflow/plugins:/opt/airflow/plugins
+    - ./clash_api/:/opt/airflow/plugins/clash_api
+    - ./.env:/opt/airflow/.env
+    - ./spark/jobs:/opt/spark/work-dir/jobs
+  
+  env_file:
+    - .env
+
+
+  networks:
+    - coc
+  user: "${AIRFLOW_UID:-50000}:${AIRFLOW_GID:-50000}"
+  depends_on:
+    redis:
+      condition: service_healthy
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    env_file:
+      - .env
+    volumes:
+      - postgres-db-volume:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    restart: always
+    networks:
+      - coc
+
+  redis:
+    image: redis:latest
+    ports:
+      - 6379:6379
+    networks:
+      - coc
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 30s
+      retries: 50
+    restart: always
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - 8080:8080
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+  airflow-worker:
+    <<: *airflow-common
+    command: celery worker
+    restart: always
+
+  airflow-init:
+    <<: *airflow-common
+    command: version
+    environment:
+      <<: *airflow-common-env
+      _AIRFLOW_DB_UPGRADE: 'true'
+      _AIRFLOW_WWW_USER_CREATE: 'true'
+      _AIRFLOW_WWW_USER_USERNAME: ${_AIRFLOW_WWW_USER_USERNAME:-airflow}
+      _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
+
+  flower:
+    <<: *airflow-common
+    command: celery flower
+    ports:
+      - "5555:5555"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:5555/"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+    restart: always
+
+  spark-master:
+    <<: *spark-common
+    container_name: spark-master
+    entrypoint: ['/opt/spark/entrypoint.sh', 'master']
+    ports:
+      - "4040:4040"
+      - "9090:8080"
+      - "7077:7077"
+
+  spark-worker:
+    <<: *spark-common
+    entrypoint: ['/opt/spark/entrypoint.sh', 'worker']
+    depends_on:
+      - spark-master
+
+  spark-history-server:
+    <<: *spark-common
+    container_name: spark-history
+    entrypoint: ['/opt/spark/entrypoint.sh', 'history']
+    depends_on:
+      - spark-master
+    ports:
+      - "18080:18080"
+
+  minio:
+    image: minio/minio
+    container_name: minio
+    env_file:
+      - .env
+    volumes:
+      - minio-data:/data
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - MINIO_DOMAIN=minio
+    networks:
+      coc:
+    ports:
+      - 9001:9001
+      - 9000:9000
+    command: ["server", "/data", "--console-address", ":9001"]
+
+  mc:
+    depends_on:
+      - minio
+    image: minio/mc
+    container_name: mc
+    networks:
+      coc:
+    volumes:
+      - minio-data:/data
+    env_file:
+      - .env
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+      - AWS_DEFAULT_REGION=${AWS_REGION}
+
+    entrypoint: |
+      /bin/sh -c "
+      echo 'Waiting for MinIO to be ready...';
+      until (/usr/bin/mc alias set minio http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD} ) do
+        echo '...waiting...';
+        sleep 1;
+      done;
+      echo 'MinIO is ready';
+
+      if ! /usr/bin/mc ls minio | grep -q 'warehouse'; then
+        echo 'Creating warehouse bucket...';
+        /usr/bin/mc mb minio/warehouse;
+        /usr/bin/mc policy set public minio/warehouse;
+        echo 'Bucket created and policy applied';
+      else
+        echo 'warehouse bucket already exists. Skipping creation.';
+      fi
+
+      tail -f /dev/null
+      "
+
+volumes:
+  postgres-db-volume:
+  spark-logs:
+  minio-data:
+
+networks:
+  coc:
+   driver: bridge 
+
