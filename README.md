@@ -16,8 +16,9 @@ MinIO (S3-compatible object storage)
 
 Airflow Web UI:
 
-<http://localhost:8080>
-
+```bash
+http://localhost:8080
+```
 ## Folder Structure
 
 - `airflow/` — DAGs, plugins, configs  
@@ -25,6 +26,7 @@ Airflow Web UI:
 - `clash_api/` — API ingestion script and raw parquet output  
 - `minio/` — Local MinIO storage  
 - `docker-compose.yml`
+
 
 
 
